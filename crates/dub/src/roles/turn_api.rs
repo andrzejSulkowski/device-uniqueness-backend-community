@@ -17,7 +17,7 @@ pub async fn run() -> anyhow::Result<()> {
     );
 
     let bind_addr = config.bind_addr;
-    let state = AppState::new(config);
+    let state = AppState::start(config);
     http_common::metrics::spawn_readiness_probe("turn-api", state.clone(), turn::http::readiness);
     let app = routes(state.clone());
 
@@ -25,10 +25,6 @@ pub async fn run() -> anyhow::Result<()> {
         .await
         .with_context(|| format!("binding {bind_addr}"))?;
     tracing::info!(addr = %bind_addr, "turn-api listening");
-
-    // The root refresher starts only after the listener is bound: a dead
-    // chain must not stop `turn-api` booting or serving `/turn/issue`.
-    state.spawn_root_refreshers();
 
     axum::serve(listener, app)
         .with_graceful_shutdown(crate::shutdown::drain())

@@ -46,7 +46,8 @@ pub const MAX_PERMIT_WAITERS: usize = 64;
 
 impl ProofState {
     /// Assemble proof state over an externally owned root cache (the caller
-    /// decides whether a chain refresher feeds it — the bin does, tests don't).
+    /// decides whether a chain refresher feeds it — [`AppState::start`] does,
+    /// tests don't).
     pub fn new(
         config: &ProofConfig,
         roots: RootCaches,
@@ -71,6 +72,8 @@ impl ProofState {
 }
 
 impl AppState {
+    /// Leaves the proof root caches empty, for tests that fill them; a process
+    /// serves [`AppState::start`].
     pub fn new(config: Config) -> Self {
         let limiter: RateLimiter = RateLimiter::new(
             RateLimiterConfig::default()
@@ -103,25 +106,26 @@ impl AppState {
 }
 
 impl AppState {
-    /// Starts keeping the proof root caches current from `TURN_PROOF_RPC_URL`.
-    /// A process serving `/turn/issue-with-proof` without calling this answers
-    /// every proof with 503. Does nothing when proof issuance is off.
-    pub fn spawn_root_refreshers(&self) {
-        let (Some(proof_state), Some(proof_config)) = (&self.proof, &self.config.proof) else {
-            return;
-        };
-        for collection in PersonhoodCollection::ALL {
-            spawn_refresher(
-                proof_state.roots.get(collection),
-                RootsConfig {
-                    rpc_url: proof_config.rpc_url.clone(),
-                    collection: collection.id(),
-                    genesis: proof_config.genesis,
-                    refresh: crate::config::PROOF_ROOT_REFRESH,
-                },
-            );
+    /// The state a process serves: [`AppState::new`] with the proof root caches
+    /// kept current from `TURN_PROOF_RPC_URL`, without which every
+    /// `/turn/issue-with-proof` request is answered 503. Needs a Tokio runtime.
+    pub fn start(config: Config) -> Self {
+        let state = Self::new(config);
+        if let (Some(proof_state), Some(proof_config)) = (&state.proof, &state.config.proof) {
+            for collection in PersonhoodCollection::ALL {
+                spawn_refresher(
+                    proof_state.roots.get(collection),
+                    RootsConfig {
+                        rpc_url: proof_config.rpc_url.clone(),
+                        collection: collection.id(),
+                        genesis: proof_config.genesis,
+                        refresh: crate::config::PROOF_ROOT_REFRESH,
+                    },
+                );
+            }
+            tracing::info!("proof-authorized issuance enabled; root refreshers started");
         }
-        tracing::info!("proof-authorized issuance enabled; root refreshers started");
+        state
     }
 }
 

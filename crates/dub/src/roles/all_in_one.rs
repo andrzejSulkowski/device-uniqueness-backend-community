@@ -96,7 +96,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     #[cfg(invite_tickets)]
     let invite_state = invite_tickets::AppState::new(invite_pool, invite_config);
-    let turn_state = turn::AppState::new(turn_config);
+    let turn_state = turn::AppState::start(turn_config);
     let notify_state = crate::roles::notify_relay::build_state(notify_config)?;
 
     let health = Health {
@@ -113,7 +113,7 @@ pub async fn run() -> anyhow::Result<()> {
         indexer: username_indexer::http::router(indexer_state),
         #[cfg(invite_tickets)]
         invite_tickets: invite_tickets::http::router(invite_state),
-        turn: turn::http::router(turn_state.clone()),
+        turn: turn::http::router(turn_state),
         notifications: notifications::http::router(notify_state),
     });
 
@@ -130,7 +130,6 @@ pub async fn run() -> anyhow::Result<()> {
         .await
         .with_context(|| format!("binding {bind_addr}"))?;
     tracing::info!(addr = %bind_addr, "all-in-one listening");
-    turn_state.spawn_root_refreshers();
 
     axum::serve(listener, app)
         .with_graceful_shutdown(crate::shutdown::drain())

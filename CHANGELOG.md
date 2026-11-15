@@ -36,6 +36,10 @@ Pre-1.0, a breaking change bumps the **minor**. Pin an exact `vX.Y.Z`.
 
 ### Fixed
 
+- **`all-in-one` serves `/api/v1/turn/issue-with-proof`.** It verifies proofs
+  against the People Chain's rings, as `turn-api` does, where it used to
+  answer every one with `503 ring roots not yet available`.
+
 - **A registration no longer waits behind the previous row's dotNS
   reservation.** The chain writer ran its People and dotNS (Asset Hub) passes
   one after the other in one loop, and each pass awaits inclusion. While an

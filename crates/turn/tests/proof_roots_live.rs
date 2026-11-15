@@ -28,10 +28,12 @@ async fn chain_genesis(rpc_url: &str) -> [u8; 32] {
 
 #[tokio::test]
 #[ignore = "needs a People Chain RPC: PEOPLE_RPC_URL, or the public Paseo default"]
-async fn refreshers_load_people_lite_roots() {
+async fn started_state_loads_people_lite_roots() {
+    // A refresher reports why it cannot load roots only through tracing.
+    let _ = tracing_subscriber::fmt().with_test_writer().try_init();
     let rpc_url = rpc_url();
     let key = ed25519_dalek::SigningKey::from_bytes(&[3u8; 32]);
-    let state = AppState::new(Config {
+    let state = AppState::start(Config {
         bind_addr: "127.0.0.1:0".parse().expect("invalid address"),
         ttl_secs: 1800,
         provider: ProviderConfig::Coturn {
@@ -56,8 +58,6 @@ async fn refreshers_load_people_lite_roots() {
         .expect("proof state missing with proof configured")
         .roots
         .get(PersonhoodCollection::PeopleLite);
-
-    state.spawn_root_refreshers();
 
     let deadline = Instant::now() + LOAD_TIMEOUT;
     while roots.snapshot(PROOF_MAX_ROOT_AGE).is_none() {
