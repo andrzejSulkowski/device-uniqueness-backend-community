@@ -28,20 +28,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     // The root refresher starts only after the listener is bound: a dead
     // chain must not stop `turn-api` booting or serving `/turn/issue`.
-    if let (Some(proof_state), Some(proof_config)) = (&state.proof, &state.config.proof) {
-        for collection in turn::proof::roots::PersonhoodCollection::ALL {
-            turn::proof::roots::spawn_refresher(
-                proof_state.roots.get(collection),
-                turn::proof::roots::RootsConfig {
-                    rpc_url: proof_config.rpc_url.clone(),
-                    collection: collection.id(),
-                    genesis: proof_config.genesis,
-                    refresh: turn::config::PROOF_ROOT_REFRESH,
-                },
-            );
-        }
-        tracing::info!("proof-authorized issuance enabled; root refreshers started");
-    }
+    state.spawn_root_refreshers();
 
     axum::serve(listener, app)
         .with_graceful_shutdown(crate::shutdown::drain())

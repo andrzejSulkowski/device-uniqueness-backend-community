@@ -6,7 +6,7 @@ use std::sync::Arc;
 use http_common::{rate_limiter::Config as RateLimiterConfig, RateLimiter};
 
 use crate::config::{Config, ProofConfig};
-use crate::proof::roots::RootCaches;
+use crate::proof::roots::{spawn_refresher, PersonhoodCollection, RootCaches, RootsConfig};
 use crate::source::Source;
 
 /// No database; the only chain-facing state is the proof root cache, refreshed
@@ -99,6 +99,29 @@ impl AppState {
             limiter,
             proof,
         }
+    }
+}
+
+impl AppState {
+    /// Starts keeping the proof root caches current from `TURN_PROOF_RPC_URL`.
+    /// A process serving `/turn/issue-with-proof` without calling this answers
+    /// every proof with 503. Does nothing when proof issuance is off.
+    pub fn spawn_root_refreshers(&self) {
+        let (Some(proof_state), Some(proof_config)) = (&self.proof, &self.config.proof) else {
+            return;
+        };
+        for collection in PersonhoodCollection::ALL {
+            spawn_refresher(
+                proof_state.roots.get(collection),
+                RootsConfig {
+                    rpc_url: proof_config.rpc_url.clone(),
+                    collection: collection.id(),
+                    genesis: proof_config.genesis,
+                    refresh: crate::config::PROOF_ROOT_REFRESH,
+                },
+            );
+        }
+        tracing::info!("proof-authorized issuance enabled; root refreshers started");
     }
 }
 
