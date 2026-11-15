@@ -103,8 +103,9 @@ impl AppState {
         }
     }
 
-    /// [`AppState::new`] plus the refreshers that keep the proof root caches
-    /// current; without them every proof is answered 503. Needs a Tokio runtime.
+    /// [`AppState::new`] plus the background refresh of the proof root caches,
+    /// without which every proof gets 503. Returns at once, whether or not the
+    /// chain is reachable. Requires a Tokio runtime.
     pub fn start(config: Config) -> Self {
         let state = Self::new(config);
         if let (Some(proof_state), Some(proof_config)) = (&state.proof, &state.config.proof) {

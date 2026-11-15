@@ -1,9 +1,9 @@
 // Copyright (C) 2026 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-only
 
-// A role serving `/turn/issue-with-proof` answers every proof 503 until its root
-// cache holds the chain's rings, so starting the refreshers is what makes the
-// route usable at all.
+// A role serving `/turn/issue-with-proof` returns 503 for every proof until its
+// root cache contains the chain's rings, so the refresh is what makes the route
+// usable at all.
 
 use std::time::{Duration, Instant};
 
@@ -27,8 +27,8 @@ async fn chain_genesis(rpc_url: &str) -> [u8; 32] {
 }
 
 #[tokio::test]
-#[ignore = "needs a People Chain RPC: PEOPLE_RPC_URL, or the public Paseo default"]
-async fn started_state_loads_people_lite_roots() {
+#[ignore = "requires a People Chain RPC: PEOPLE_RPC_URL, or the public Paseo default"]
+async fn people_lite_root_refresh() {
     // A refresher reports why it cannot load roots only through tracing.
     let _ = tracing_subscriber::fmt().with_test_writer().try_init();
     let rpc_url = rpc_url();
