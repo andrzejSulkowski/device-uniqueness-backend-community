@@ -72,8 +72,7 @@ impl ProofState {
 }
 
 impl AppState {
-    /// Leaves the proof root caches empty, for tests that fill them; a process
-    /// serves [`AppState::start`].
+    /// For tests: the proof root caches stay empty. A process serves [`AppState::start`].
     pub fn new(config: Config) -> Self {
         let limiter: RateLimiter = RateLimiter::new(
             RateLimiterConfig::default()
@@ -103,12 +102,9 @@ impl AppState {
             proof,
         }
     }
-}
 
-impl AppState {
-    /// The state a process serves: [`AppState::new`] with the proof root caches
-    /// kept current from `TURN_PROOF_RPC_URL`, without which every
-    /// `/turn/issue-with-proof` request is answered 503. Needs a Tokio runtime.
+    /// [`AppState::new`] plus the refreshers that keep the proof root caches
+    /// current; without them every proof is answered 503. Needs a Tokio runtime.
     pub fn start(config: Config) -> Self {
         let state = Self::new(config);
         if let (Some(proof_state), Some(proof_config)) = (&state.proof, &state.config.proof) {
