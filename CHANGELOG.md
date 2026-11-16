@@ -24,7 +24,26 @@ Pre-1.0, a breaking change bumps the **minor**. Pin an exact `vX.Y.Z`.
   boot check on `attest` now compares argument names and accepts either
   consumer shape, instead of requiring the vendored types.
 
+- **An outbox drain for a People runtime upgrade.** `INTAKE_PAUSED=true` makes
+  `POST /api/v1/usernames` answer `503` `INTAKE_PAUSED` before it reads or
+  writes anything, while the writer and the queue advancer keep going.
+  `dub --outbox-drained` exits `0` once every People-lane row is `ASSIGNED` or
+  `FAILED_TERMINAL`, and otherwise lists what is left per status and exits
+  `1`. The writer publishes the same count as `dub_outbox_undrained`. See
+  `docs/operations.md`, "Draining the outbox for a People runtime upgrade".
+
 ### Changed
+
+- **`device-attestation-api` now needs `ASSET_HUB_RPC_URL`, and refuses to
+  start without it.** Availability and the intake's digit choice read Asset
+  Hub's `DotnsGateway::LiteLabelOwner`, as well as People's
+  `Resources::UsernameOwnerOf` while the People runtime still keeps usernames.
+  Once it does not (paritytech/individuality-community#129), the People reads
+  stop and a base is no longer `EXHAUSTED` over a taken or full personhood-name
+  reservation. That state is gone from `Resources`; a check against the dotNS
+  contracts is planned. The API connects read-only and never submits to Asset
+  Hub. Set `ASSET_HUB_RPC_URL` for `device-attestation-api` (and `all-in-one`)
+  before upgrading; it must name the same network as `PEOPLE_RPC_URL`.
 
 - **TURN readiness reports `proof-roots`.** With `TURN_PROOF_ENABLED`,
   `turn-api`'s `/readyz` answers `503` with `"proof-roots": "down"` while

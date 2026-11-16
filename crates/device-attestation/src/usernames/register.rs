@@ -17,8 +17,8 @@ use serde::Serialize;
 use serde_json::Value;
 use utoipa::ToSchema;
 
-use crate::chain::attest::AttestShape;
 use crate::chain::attest::PayloadVersion;
+use crate::config::Config;
 use crate::{
     chain::outbox::{self, InsertError, NewReservation},
     device_check::{self, Decision},
@@ -29,7 +29,7 @@ use crate::{
 };
 
 use super::error::{FieldError, UsernamesError, UsernamesResult};
-use super::{available_digits, base_state_at, reservation_state};
+use super::{attest_shape_at, available_digits, claim_state_at, reservation_state};
 
 mod request;
 
@@ -147,8 +147,12 @@ const DEVICE_TOKEN_HEADER: &str = "Device-Token-iOS";
          body = serde_json::Value,
          example = json!({ "error": "iOS DeviceCheck verification failed" })),
         (status = 503, description = "The DeviceCheck free slot could not be marked used at Apple after \
-            a successful gate (upstream write failure; retryable), or the enforced Widevine dedup gate \
-            could not fetch the attestation revocation list (`DEVICE_EVIDENCE_UNAVAILABLE`; retryable).",
+            a successful gate (upstream write failure; retryable), the enforced Widevine dedup \
+            gate could not fetch the attestation revocation list \
+            (`DEVICE_EVIDENCE_UNAVAILABLE`; retryable), or intake is paused while the outbox \
+            drains ahead of a People runtime upgrade (`INTAKE_PAUSED`; retryable once the \
+            upgrade is through, and the claim may need re-signing in the payload version the \
+            upgraded runtime takes).",
          body = serde_json::Value,
          example = json!({ "error": "Failed to mark iOS device as registered with Apple DeviceCheck" }))
     )
@@ -159,6 +163,8 @@ pub async fn register(
     headers: HeaderMap,
     body: Bytes,
 ) -> UsernamesResult<Response> {
+    // Ahead of the rate limit, so a paused intake spends nobody's slot.
+    let () = check_intake_open(&state.config)?;
     let () = super::check_rate_limit(&state, &auth.subject).await?;
     validate_device_token_header(&headers)?;
 
@@ -171,19 +177,20 @@ pub async fn register(
         .await
         .map_err(|e| UsernamesError::from(anyhow::Error::from(e)))?;
     let signature_form = crate::signature::account_signature_form(at.metadata_ref(), PEOPLE_PALLET);
-    let accepted_version: PayloadVersion = AttestShape::try_from(at.metadata_ref())
-        .map_err(UsernamesError::from)?
-        .payload_version();
+    let shape = attest_shape_at(&at)?;
+    let accepted_version: PayloadVersion = shape.payload_version();
     let mut parsed = validate_register(&value, &state.config, &signature_form, accepted_version)?;
 
-    let base = base_state_at(&state, &parsed.username, &at).await?;
+    let base = claim_state_at(&state, &parsed.username, &at, shape).await?;
     if let Some(reserved) = reserved_name(&parsed) {
+        // `None` on a People runtime that keeps no personhood names: there is
+        // nothing on People to reject the reservation leg.
         let reservation = if reserved == parsed.username {
-            base.reservation()
+            base.reservation
         } else {
-            reservation_state(&state, reserved).await?
+            reservation_state(&state, reserved, shape).await?
         };
-        if reservation.rejects() {
+        if reservation.is_some_and(|reservation| reservation.rejects()) {
             return Err(UsernamesError::FullNameUnavailable {
                 reserved: reserved.to_string(),
             });
@@ -381,6 +388,15 @@ enum WidevineGate {
 /// The challenge is consumed only after evidence fully verifies, so malformed
 /// evidence cannot burn one and a CRL outage stays retryable. The challenge is
 /// the whole gate's freshness boundary — the evidence carries no lifetime.
+/// Refuses every claim while `INTAKE_PAUSED` is set, so the outbox only
+/// shrinks during a drain.
+fn check_intake_open(config: &Config) -> UsernamesResult<()> {
+    if config.intake_paused {
+        return Err(UsernamesError::IntakePaused);
+    }
+    Ok(())
+}
+
 async fn widevine_gate(
     state: &AppState,
     auth: &AuthSubject,
@@ -812,6 +828,51 @@ mod tests {
         assert_eq!(
             body["error"],
             json!("The full name reservedname is not available to reserve. Choose another name.")
+        );
+    }
+
+    #[test]
+    fn a_paused_intake_refuses_the_claim() {
+        let mut config = Config::test_default();
+        assert!(
+            check_intake_open(&config).is_ok(),
+            "intake is open unless INTAKE_PAUSED is set"
+        );
+
+        config.intake_paused = true;
+        assert!(
+            matches!(
+                check_intake_open(&config),
+                Err(UsernamesError::IntakePaused)
+            ),
+            "a paused intake must refuse before anything is read or written"
+        );
+    }
+
+    /// Clients and the operator tell a drain apart from an outage by this code.
+    #[tokio::test]
+    async fn a_paused_intake_is_a_503_naming_the_pause() {
+        use axum::response::IntoResponse as _;
+        use http_body_util::BodyExt as _;
+
+        let response = UsernamesError::IntakePaused.into_response();
+        assert_eq!(
+            response.status(),
+            StatusCode::SERVICE_UNAVAILABLE,
+            "a drain is a retryable unavailability, not a client error"
+        );
+
+        let bytes = response
+            .into_body()
+            .collect()
+            .await
+            .expect("read body")
+            .to_bytes();
+        let body: Value = serde_json::from_slice(&bytes).expect("json body");
+        assert_eq!(
+            body["error"],
+            json!("INTAKE_PAUSED"),
+            "the stable code clients match on"
         );
     }
 
