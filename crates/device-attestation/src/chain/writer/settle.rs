@@ -8,7 +8,8 @@
 //! `DotnsPopController` as a pending claim. It stays pending until a signed
 //! origin calls `settlePendingClaims(user, limit)`, which deploys the store and
 //! writes the label. That call is permissionless and its signer pays the fee
-//! and the store's deposit. Lite users hold no Asset Hub funds, so nobody else
+//! and the store's deposit. Device-name holders have no Asset Hub funds, so
+//! nobody else makes it.
 //! makes it.
 //!
 //! Settlement runs in the dotNS lane, between its passes and on its nonce, so
