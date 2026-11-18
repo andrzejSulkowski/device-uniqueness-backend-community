@@ -427,7 +427,9 @@ Operational invariants an agent must respect when touching the code.
   controller's own enumeration of accounts with pending claims (`pendingClaimUsers`), so it needs no
   bookkeeping of its own and also covers names other backends minted; it dry-runs each settlement
   and submits only those that would go through, as one `Utility.force_batch` of `Revive.call`s
-  bounded by half a normal extrinsic's weight. The calls are the signer's own, never proxied: the
+  bounded by half a normal extrinsic's weight and by the signer's free balance above
+  `ATTESTER_SIGNER_BALANCE_FLOOR_PLANCK`: `reserve_name` pays its fee up front from the same
+  balance, so settlement never spends it below what reservations need. The calls are the signer's own, never proxied: the
   attester authority is not who pays. *Trade-off:* settling every listed account spends the
   operator's funds on names other backends minted, so it is off unless `DOTNS_SETTLE_ENABLED` is
   set. Nothing in DUB reads the settled label, and `DeviceNameIssued` is emitted at mint on both

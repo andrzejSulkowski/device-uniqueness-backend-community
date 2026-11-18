@@ -209,7 +209,7 @@ pub async fn run(config: WriterConfig) -> Result<(), WriterError> {
     let asset_hub_rpc = config.asset_hub_rpc_url.clone();
     let dotns_link = DotnsLink::new(asset_hub_rpc, config_attester);
     let passes = Passes::new(&config, dotns_link.subscribe());
-    let settler = Settler::new(config.settle);
+    let settler = Settler::new(config.settle, config.signer_balance_floor_planck);
     let mut writer = Writer {
         pool,
         chain,

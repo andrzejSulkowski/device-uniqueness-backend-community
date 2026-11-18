@@ -666,22 +666,35 @@ origin calls `settlePendingClaims`. Pending claims never lapse.
 With `DOTNS_SETTLE_ENABLED=true` the writer settles them. Every
 `DOTNS_SETTLE_INTERVAL_SECS`, after a dotNS pass that found nothing to do, it:
 
-1. maps the signer in pallet-revive (`Revive.map_account`) if it is not mapped
+1. reads the signer's Asset Hub free balance, and does nothing that step if it
+   is at or below `ATTESTER_SIGNER_BALANCE_FLOOR_PLANCK`;
+2. maps the signer in pallet-revive (`Revive.map_account`) if it is not mapped
    yet, and does nothing else that step;
-2. reads one page of `pendingClaimUsers` (up to `DOTNS_SETTLE_MAX_ACCOUNTS`);
-3. dry-runs `settlePendingClaims(user, DOTNS_SETTLE_CLAIM_LIMIT)` for each, from
+3. reads one page of `pendingClaimUsers` (up to `DOTNS_SETTLE_MAX_ACCOUNTS`);
+4. dry-runs `settlePendingClaims(user, DOTNS_SETTLE_CLAIM_LIMIT)` for each, from
    the signer, and skips any that would revert;
-4. submits the rest as one `Utility.force_batch` of `Revive.call`s, signed by
+5. submits the rest as one `Utility.force_batch` of `Revive.call`s, signed by
    the signer itself (never proxied), with a quarter more weight and a tenth
    more deposit than the dry run used. The batch stops at half of a normal
-   extrinsic's weight, so it never fills a block the lane also needs.
+   extrinsic's weight, so it never fills a block the lane also needs, and at
+   the deposits the balance holds above the floor, so it never spends what
+   `reserve_name` needs for its fees.
+
+The walk keeps its place in the controller's set between steps. It reads a page
+again until every account on it has settled or been passed over (its dry run
+reverts, its call failed in the block, or it does not fit an extrinsic on its
+own), because the set fills a settled account's slot with its last account.
+Passed accounts are remembered by address and tried again once the walk
+reaches the end of the set and starts over.
 
 It covers every account the controller lists, including names other backends
 minted. **The signer pays**: each settled account costs the fee plus its new
 `LabelStore` deposit, about 0.53 PAS on Paseo Next, where about 9,800 accounts
 were pending when this was written. Fund the signer for the backlog before
-turning it on, and keep `ATTESTER_SIGNER_BALANCE_FLOOR_PLANCK` above a few
-steps' worth. On Paseo Next a settlement needs about 1.2 MB of proof, so a step
+turning it on. Settlement stops at `ATTESTER_SIGNER_BALANCE_FLOOR_PLANCK`
+(logging `dotns settlement paused`) and resumes by itself once the signer is
+topped up, so set the floor to cover the reservation fees the signer must pay
+until a top-up lands. On Paseo Next a settlement needs about 1.2 MB of proof, so a step
 settles two accounts; at the default interval the backlog takes days.
 
 Watch `dub_dotns_pending_claim_accounts` (the controller's live count, read
