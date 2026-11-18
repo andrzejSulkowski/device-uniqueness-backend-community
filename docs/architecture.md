@@ -421,7 +421,7 @@ Operational invariants an agent must respect when touching the code.
   mints from a Root origin, which pallet-revive does not let deploy a contract, so a name whose
   owner has no `LabelStore` stays a pending claim on `DotnsPopController` until a signed origin
   calls `settlePendingClaims`. That call is permissionless and its signer pays the fee and the
-  store's deposit; lite users hold no Asset Hub funds, so the writer's signer is the only party
+  store's deposit; device-name holders have no Asset Hub funds, so the writer's signer is the only party
   placed to make it. It signs from the same account as `reserve_name`, so it shares that lane's
   nonce and runs between the lane's passes, never beside them. Each step walks one page of the
   controller's own enumeration of accounts with pending claims (`pendingClaimUsers`), so it needs no
