@@ -3,7 +3,7 @@
 
 //! The `DotnsGateway` pallet on Asset Hub, the indexer's source.
 //!
-//! Every lite username is issued through the gateway, which records each
+//! Every device name is issued through the gateway, which records each
 //! account's labels in `AccountNames` (`account → {lite, full}`, each with the
 //! chat key the contracts hold) and announces every write with `NameReserved`
 //! or `NameRegistered`. The People runtime stops keeping usernames with
@@ -30,7 +30,7 @@ pub(crate) fn account_names() -> DynamicAddress<(AccountId32,), AccountNameRecor
 #[derive(Debug, Clone, PartialEq, Eq, DecodeAsType)]
 #[decode_as_type(crate_path = "subxt::ext::scale_decode")]
 pub(crate) struct AccountNameRecord {
-    /// The most recently reserved lite label, `<base>.<digits>`.
+    /// The most recently reserved device-name label, `<base>.<digits>`.
     pub lite: Option<NameEntry>,
     /// The registered full-person label.
     pub full: Option<NameEntry>,
@@ -63,8 +63,8 @@ struct NameRegistered {
 /// Why an account's labels make no projection row.
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub(crate) enum Unindexable {
-    /// The account holds no lite label, only a full one.
-    #[error("the account holds no lite label")]
+    /// The account holds no device-name label, only a full one.
+    #[error("the account holds no device-name label")]
     NoLite,
     /// Neither label carries a chat key, which the row requires.
     #[error("no label carries a chat key")]
@@ -76,9 +76,9 @@ pub(crate) enum Unindexable {
 
 /// The projection row for `account`'s labels.
 ///
-/// The lite label is the username, and the full label shadows it for display,
+/// The device-name label is the username, and the full label shadows it for display,
 /// as on People. The chat key is the identifier key DUB registered with: the
-/// lite label's, or the full label's when the lite one was never recorded.
+/// device-name label's, or the full label's when the device-name one was never recorded.
 pub(crate) fn assigned_username(
     account: [u8; 32],
     record: AccountNameRecord,
@@ -153,9 +153,12 @@ mod tests {
             full: None,
         })
         .expect("a row");
-        assert_eq!(record.lite_username, "alicex.07", "the lite label");
+        assert_eq!(record.lite_username, "alicex.07", "the device-name label");
         assert_eq!(record.display_username, "alicex.07", "shown as itself");
-        assert_eq!(record.identifier_key, [0; 65], "the lite label's chat key");
+        assert_eq!(
+            record.identifier_key, [0; 65],
+            "the device-name label's chat key"
+        );
     }
 
     #[test]
@@ -167,7 +170,10 @@ mod tests {
         .expect("a row");
         assert_eq!(record.full_username.as_deref(), Some("alice"), "kept");
         assert_eq!(record.display_username, "alice", "shown instead");
-        assert_eq!(record.identifier_key, [0; 65], "still the lite label's key");
+        assert_eq!(
+            record.identifier_key, [0; 65],
+            "still the device-name label's key"
+        );
     }
 
     #[test]
@@ -188,7 +194,7 @@ mod tests {
                 full: Some(entry("alice", Some(9))),
             }),
             Err(Unindexable::NoLite),
-            "a full-only account has no lite username"
+            "a full-only account has no device name"
         );
         assert_eq!(
             row(AccountNameRecord {
@@ -204,7 +210,7 @@ mod tests {
                 full: None,
             }),
             Err(Unindexable::Malformed(DecodeError::LiteFormat)),
-            "a lite label needs its digits"
+            "a device-name label needs its digits"
         );
     }
 

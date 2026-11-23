@@ -827,8 +827,8 @@ The same mechanism rebuilds the projection the first time an indexer whose
 source moved to Asset Hub (`ASSET_HUB_RPC_URL`, replacing its `PEOPLE_RPC_URL`)
 boots against a database built from People: the genesis differs, so it
 re-bootstraps from `DotnsGateway::AccountNames`. Search serves the old rows
-until the rebuild starts, then fills back in as the scan pages through. A lite
-username that never reached Asset Hub (its dotNS half failed terminally) is not
+until the rebuild starts, then fills back in as the scan pages through. A device
+name that never reached Asset Hub (its dotNS half failed terminally) is not
 in the rebuilt projection.
 
 **The device-attestation database needs a decision, so it is a script.** Its

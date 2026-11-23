@@ -538,18 +538,18 @@ Operational invariants an agent must respect when touching the code.
   signing key whose own account differs from it wraps the batch in
   `Proxy.proxy(real = INVITER_ADDRESS, force_proxy_type = Any)`.
 - **`username-indexer` projects Asset Hub's `DotnsGateway::AccountNames`, not People.** The gateway
-  issues every lite username and records each account's labels there (`{lite, full}`, each with the
+  issues every device name and records each account's labels there (`{lite, full}`, each with the
   chat key the contracts hold), and announces every write with `NameReserved` or `NameRegistered`.
   People's `Resources` stops keeping usernames with paritytech/individuality-community#129, so this
   is the one source that outlives that upgrade. Bootstrap scans the map; each finalized block's
-  gateway events name the accounts to re-read. The lite label is the username, the full label
+  gateway events name the accounts to re-read. The device-name label is the username, the full label
   shadows it for display, and the chat key is the identifier key, which DUB registers as the chat
   key. Asset Hub has no generated API here: the record and the two events decode dynamically
-  against the connected runtime, naming only the fields read. An account with no lite label, or no
+  against the connected runtime, naming only the fields read. An account with no device-name label, or no
   chat key on either label, cannot fill a row and is skipped. Accounts render with the **People**
   SS58 prefix, read from the vendored People metadata, because that is how clients know them and
   Asset Hub's own prefix differs on `testnet`.
-  *Trade-off:* a lite username that reached People but never Asset Hub (a dotNS lane that failed
+  *Trade-off:* a device name that reached People but never Asset Hub (a dotNS lane that failed
   terminally) is not searchable. After the People upgrade it exists nowhere else either.
 - **`username-indexer` serializes projection writes on one Postgres advisory lock.** Bootstrap and
   the incremental sync loop share one lock id; a full snapshot bootstrap runs **only when there is no

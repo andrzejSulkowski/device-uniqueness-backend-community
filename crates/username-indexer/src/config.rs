@@ -18,8 +18,8 @@ pub struct Config {
     pub bind_addr: SocketAddr,
     /// Service-owned Postgres connection string.
     pub database_url: String,
-    /// Asset Hub WebSocket RPC endpoint, whose `DotnsGateway` holds every lite
-    /// username.
+    /// Asset Hub WebSocket RPC endpoint, whose `DotnsGateway` holds every device
+    /// name.
     pub asset_hub_rpc_url: String,
     /// Maximum number of storage entries requested and written per page.
     pub storage_page_size: u32,
