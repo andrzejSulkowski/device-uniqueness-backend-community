@@ -786,7 +786,9 @@ and neither depends on `ENFORCE_AUTH` (which governs platform attestation):
 Unset (or blank), `DEVICE_CHECK_IOS_ENFORCE` inherits `ENFORCE_AUTH`, which was
 the only behaviour before it existed, and `device-attestation-api` warns at
 boot. Set it explicitly: the Helm chart refuses to render a workload that
-enables DeviceCheck without it. A typical rollout:
+enables DeviceCheck without it. The inheritance is deprecated: a later
+release will refuse to boot when DeviceCheck is enabled and
+`DEVICE_CHECK_IOS_ENFORCE` is unset. A typical rollout:
 
 1. `DEVICE_CHECK_IOS_ENABLED=true`, `DEVICE_CHECK_IOS_ENFORCE=false`: watch the
    verdicts. The boot log warns that seen devices still register.

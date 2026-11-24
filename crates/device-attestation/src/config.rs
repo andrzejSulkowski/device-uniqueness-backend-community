@@ -571,7 +571,7 @@ impl DeviceCheckWarning {
         match self {
             Self::Inherited => {
                 "DEVICE_CHECK_IOS_ENFORCE is unset; the DeviceCheck gate inherits \
-                 ENFORCE_AUTH. Set it explicitly"
+                 ENFORCE_AUTH (deprecated: a later release refuses to boot). Set it explicitly"
             }
             Self::Advisory => {
                 "DeviceCheck is enabled but advisory (DEVICE_CHECK_IOS_ENFORCE=false): \

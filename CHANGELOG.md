@@ -56,6 +56,12 @@ plan that rotation with the app teams. Local checkouts run `just dev-secrets`.
 - `just dev-secrets` (`scripts/dev_secrets.sh`) writes a fresh JWT seed, its
   public key and, under `coturn`, a `TURN_SECRET` into `.env`.
 
+### Deprecated
+
+- Leaving `DEVICE_CHECK_IOS_ENFORCE` unset while `DEVICE_CHECK_IOS_ENABLED` is
+  `true`. A later release will refuse to boot instead of inheriting
+  `ENFORCE_AUTH`; set it explicitly now. (security_findings#141)
+
 ## [0.9.0] - 2026-11-19
 
 Runtime versions this release targets:
