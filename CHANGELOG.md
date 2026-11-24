@@ -46,6 +46,13 @@ plan that rotation with the app teams. Local checkouts run `just dev-secrets`.
 
 ### Added
 
+- **`DEVICE_CHECK_IOS_ENFORCE`**: the iOS DeviceCheck gate's posture, no longer
+  tied to `ENFORCE_AUTH`. iOS uniqueness can now be enforced while attestation
+  is still soft, or left advisory under hard attestation. Unset, it inherits
+  `ENFORCE_AUTH` as before and logs a boot warning; the Helm chart requires it
+  whenever `DEVICE_CHECK_IOS_ENABLED` is `"true"`. Boot also warns when the gate
+  is enabled but advisory, and when it is enforced without hard attestation.
+  (security_findings#141)
 - `just dev-secrets` (`scripts/dev_secrets.sh`) writes a fresh JWT seed, its
   public key and, under `coturn`, a `TURN_SECRET` into `.env`.
 
