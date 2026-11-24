@@ -8,7 +8,9 @@ use std::str::FromStr as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine as _;
 pub use http_common::config::ConfigError;
-use http_common::config::{jwt_verifier_from_env, parse_var, positive, required_var};
+use http_common::config::{
+    jwt_verifier_from_env, parse_var, positive, reject_dev_secret, required_var,
+};
 
 use crate::credentials::Algorithm;
 
@@ -213,6 +215,7 @@ fn decode_secret(raw: &str) -> Result<Vec<u8>, ConfigError> {
             reason: "must not be empty".to_string(),
         });
     }
+    reject_dev_secret("TURN_SECRET", &bytes)?;
     Ok(bytes)
 }
 
@@ -395,6 +398,20 @@ mod tests {
         assert_eq!(decode_secret("QUJD").expect("valid"), b"ABC");
         assert!(decode_secret("not base64!").is_err());
         assert!(decode_secret("").is_err());
+    }
+
+    #[test]
+    fn refuses_the_published_dev_secrets() {
+        for published in [
+            "ZGV2LW9ubHktdHVybi1zZWNyZXQtY2hhbmdlLW1l",
+            "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+        ] {
+            assert!(matches!(
+                decode_secret(published),
+                Err(ConfigError::Invalid { key: "TURN_SECRET", reason })
+                    if reason.contains("published development value")
+            ));
+        }
     }
 
     #[test]

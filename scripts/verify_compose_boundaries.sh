@@ -331,4 +331,31 @@ fi
   done
 )
 
+# No committed fallbacks. These keys must reach a service only as a bare
+# pass-through, `KEY: ${KEY:-}`, so an environment that forgot to set one fails
+# at boot naming it instead of running on a value printed in this repository.
+# Checked on the RAW files: the rendered form cannot tell a default from a value
+# the operator set.
+#   - signing secrets and verify keys: a published value lets anyone mint
+#     tokens every service accepts, or TURN credentials;
+#   - chain endpoints: a default silently points an unconfigured environment at
+#     a public network, and the two must always name the same one.
+NO_DEFAULT_KEYS=(
+  JWT_ED25519_SECRET
+  JWT_ED25519_PUBLIC_KEY
+  TURN_SECRET
+  PEOPLE_RPC_URL
+  ASSET_HUB_RPC_URL
+)
+for file in docker-compose.yml docker-compose.debug.yml; do
+  for key in "${NO_DEFAULT_KEYS[@]}"; do
+    bad="$(grep -nE "^[[:space:]]+${key}:" "$file" | grep -vE "^[0-9]+:[[:space:]]+${key}: \\$\\{${key}:-\\}[[:space:]]*(#.*)?$" || true)"
+    if [ -n "$bad" ]; then
+      echo "$file: $key must be passed through with no default (\`$key: \${$key:-}\`), got:" >&2
+      echo "$bad" >&2
+      exit 1
+    fi
+  done
+done
+
 echo "compose configuration boundaries: ok"

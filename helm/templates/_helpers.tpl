@@ -132,8 +132,16 @@ chart every time, so a `fail` here is the last check that always runs.
 {{/* Dev and placeholder credentials, rejected wherever a secret is set. The
      prefix of a secret cannot be asserted instead: deploy tooling that resolves
      `ref+vault://` does so before helm runs, so a correctly configured render
-     sees the real value, not the reference. */}}
-{{- $devSecrets := list "//Alice" "//Bob" "//Charlie" "//Dave" "//Eve" "TODO" "tbd" "changeme" -}}
+     sees the real value, not the reference.
+     Includes every JWT seed and TURN secret this repository has published as a
+     dev default, in each spelling it shipped in (the binaries refuse them by
+     decoded value too: http_common::config::reject_dev_secret). */}}
+{{- $devSecrets := list "//Alice" "//Bob" "//Charlie" "//Dave" "//Eve" "TODO" "tbd" "changeme"
+      "0x0101010101010101010101010101010101010101010101010101010101010101"
+      "0101010101010101010101010101010101010101010101010101010101010101"
+      "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+      "ZGV2LW9ubHktdHVybi1zZWNyZXQtY2hhbmdlLW1l"
+      "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=" -}}
 
 {{/* ── Topology ─────────────────────────────────────────────────────────────
 
@@ -279,9 +287,10 @@ chart every time, so a `fail` here is the last check that always runs.
   {{- end }}
 {{- end }}
 
-{{/* The dev keypair is committed in docker-compose.yml. Defaulting to it means an
-     environment file that merely OMITS the key gets four services verifying
-     tokens anyone with this repo can mint. An omission must fail, not degrade. */}}
+{{/* The dev keypair has been published in this repository (its seed is
+     0x0101..01). Defaulting to it means an environment file that merely OMITS
+     the key gets four services verifying tokens anyone with this repo can mint.
+     An omission must fail, not degrade. */}}
 {{- $devPub := "0x8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }}
 {{- $devAlice := "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY" }}
 {{- if and (not $g.env.JWT_JWKS_JSON) (or (not $g.env.JWT_ED25519_PUBLIC_KEY) (eq $g.env.JWT_ED25519_PUBLIC_KEY $devPub)) }}

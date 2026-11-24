@@ -128,10 +128,9 @@ pub struct WriterConfig {
 impl WriterConfig {
     pub fn from_env() -> Result<Self, ConfigError> {
         let database_url = http_common::config::required_var("DEVICE_ATTESTATION_DATABASE_URL")?;
-        let people_rpc_url = std::env::var("PEOPLE_RPC_URL")
-            .unwrap_or_else(|_| "wss://paseo-people-next-system-rpc.polkadot.io".to_string());
         let signer_suri = http_common::config::required_var("CHAIN_WRITER_SIGNER_SURI")?;
         let attester = crate::config::attester_account_from_env()?;
+        let people_rpc_url = crate::config::people_rpc_url_from_env()?;
         let holder_id = match std::env::var("CHAIN_WRITER_HOLDER_ID") {
             Ok(value) if !value.trim().is_empty() => value,
             _ => format!(
@@ -483,6 +482,7 @@ mod tests {
         ),
         ("CHAIN_WRITER_SIGNER_SURI", "//Writer"),
         ("ATTESTER_ACCOUNT", ALICE_SS58),
+        ("PEOPLE_RPC_URL", "wss://people.invalid"),
         ("ASSET_HUB_RPC_URL", "wss://asset-hub.invalid"),
     ];
 
@@ -569,10 +569,7 @@ mod tests {
         );
 
         let config = from_env_with(REQUIRED_ENV).unwrap();
-        assert_eq!(
-            config.people_rpc_url,
-            "wss://paseo-people-next-system-rpc.polkadot.io"
-        );
+        assert_eq!(config.people_rpc_url, "wss://people.invalid");
         assert!(
             config
                 .holder_id
@@ -633,6 +630,32 @@ mod tests {
         vars.push(("ATTESTER_ACCOUNT", "not-an-account"));
         let err = from_env_with(&vars).unwrap_err();
         assert!(err.to_string().contains("ATTESTER_ACCOUNT"), "{err}");
+
+        // No built-in chain: an unset or empty PEOPLE_RPC_URL fails at boot
+        // instead of silently reaching a public network.
+        let vars: Vec<_> = REQUIRED_ENV
+            .iter()
+            .copied()
+            .filter(|(key, _)| *key != "PEOPLE_RPC_URL")
+            .collect();
+        let err = from_env_with(&vars).unwrap_err();
+        assert!(
+            matches!(err, ConfigError::Missing("PEOPLE_RPC_URL")),
+            "{err}"
+        );
+        let mut empty = vars.clone();
+        empty.push(("PEOPLE_RPC_URL", "  "));
+        let err = from_env_with(&empty).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                ConfigError::Invalid {
+                    key: "PEOPLE_RPC_URL",
+                    ..
+                }
+            ),
+            "{err}"
+        );
 
         let mut vars = REQUIRED_ENV.to_vec();
         vars.push(("QUEUE_ENABLED", "maybe"));

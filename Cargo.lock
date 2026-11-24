@@ -2233,6 +2233,7 @@ version = "0.9.0"
 dependencies = [
  "anyhow",
  "axum",
+ "base64",
  "client-ip",
  "ed25519-dalek",
  "governor",

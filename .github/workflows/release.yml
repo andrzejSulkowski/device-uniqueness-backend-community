@@ -299,6 +299,22 @@ jobs:
             # valid compose file rather than something the substitutions mangled.
             docker compose -f "$out/docker-compose.yml" config -q
 
+            # No signing secret, verify key or chain endpoint may ship with a
+            # usable value: an operator running `cp .env.example .env` must be
+            # stopped at boot, not handed the published dev JWT seed or TURN
+            # secret. The binaries refuse these values too; this keeps them out
+            # of the artifact in the first place.
+            for key in JWT_ED25519_SECRET JWT_ED25519_PUBLIC_KEY TURN_SECRET; do
+              if grep -E "^${key}=." "$out/.env.example"; then
+                echo "::error::the $network bundle's .env.example ships a value for $key"
+                exit 1
+              fi
+            done
+            if grep -rniE '0x(01){32}|8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c|ZGV2LW9ubHktdHVybi1zZWNyZXQtY2hhbmdlLW1l|QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=' "$out"; then
+              echo "::error::the $network bundle carries a published development secret"
+              exit 1
+            fi
+
             tar -C "$out" -czf "dub-compose-$VERSION-$network.tar.gz" \
               docker-compose.yml .env.example gateway
           done
