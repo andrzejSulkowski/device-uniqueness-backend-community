@@ -84,15 +84,14 @@ seed="$(openssl rand -hex 32)"
 # Ed25519 public key from a raw seed: wrap it as a PKCS#8 DER private key
 # (fixed 16-byte prefix for an Ed25519 key), export the SubjectPublicKeyInfo,
 # and keep its last 32 bytes.
-public_key="$(
+if ! public_key="$(
   printf '302e020100300506032b657004220420%s' "$seed" \
     | xxd -r -p \
     | openssl pkey -inform DER -pubout -outform DER \
     | tail -c 32 \
     | xxd -p -c 64
-)"
-if [[ ${#public_key} -ne 64 ]]; then
-  echo "failed to derive the Ed25519 public key (is openssl >= 1.1.1 installed?)" >&2
+)" || [[ ${#public_key} -ne 64 ]]; then
+  echo "failed to derive the Ed25519 public key (needs OpenSSL >= 1.1.1; macOS ships LibreSSL)" >&2
   exit 1
 fi
 
