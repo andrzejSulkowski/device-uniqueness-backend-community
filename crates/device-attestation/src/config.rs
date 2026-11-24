@@ -152,8 +152,10 @@ impl From<http_common::config::ConfigError> for ConfigError {
 impl Config {
     /// Read and validate configuration from the environment.
     ///
-    /// Fails (rather than defaulting) for `DEVICE_ATTESTATION_DATABASE_URL`
-    /// and `JWT_ED25519_SECRET`; everything else has a safe local default.
+    /// Fails (rather than defaulting) for `DEVICE_ATTESTATION_DATABASE_URL`,
+    /// `JWT_ED25519_SECRET`, `PEOPLE_RPC_URL`, `ASSET_HUB_RPC_URL` and
+    /// `ATTESTER_ACCOUNT`, plus the attestation inputs when `AUTH_ENABLED` is
+    /// on. Everything else has a safe default.
     pub fn from_env() -> Result<Self, ConfigError> {
         let bind_addr = parse_var("BIND_ADDR", "0.0.0.0:8080")?;
         let database_url = std::env::var("DEVICE_ATTESTATION_DATABASE_URL")
@@ -220,8 +222,7 @@ impl Config {
             database_url: SecretString::from(database_url),
             jwt_secret: SecretBox::new(Box::new(jwt_secret)),
             jwt_issuer: std::env::var("JWT_ISSUER").unwrap_or_else(|_| "polkadot-app".to_string()),
-            people_rpc_url: std::env::var("PEOPLE_RPC_URL")
-                .unwrap_or_else(|_| "wss://paseo-people-next-system-rpc.polkadot.io".to_string()),
+            people_rpc_url: people_rpc_url_from_env()?,
             asset_hub_rpc_url: http_common::config::required_var("ASSET_HUB_RPC_URL")?,
             attester_account: attester_account_from_env()?,
             access_ttl: Duration::from_secs(parse_var("ACCESS_TOKEN_TTL_SECS", "86400")?),
@@ -321,14 +322,31 @@ impl Config {
     }
 }
 
+/// Read the required `PEOPLE_RPC_URL`.
+///
+/// Shared by every device-attestation role that reaches the People Chain. No
+/// default: a fallback would silently point an unconfigured environment at a
+/// public network, which is exactly the network an operator did not choose.
+pub(crate) fn people_rpc_url_from_env() -> Result<String, ConfigError> {
+    Ok(http_common::config::required_var("PEOPLE_RPC_URL")?)
+}
+
 /// Parse `JWT_ED25519_SECRET` (hex or base64) into a 32-byte Ed25519 seed.
+///
+/// Unset and empty are both [`ConfigError::Missing`]: compose passes an unset
+/// secret through as an empty string.
 fn parse_jwt_secret() -> Result<[u8; 32], ConfigError> {
     let raw = std::env::var("JWT_ED25519_SECRET")
-        .map_err(|_| ConfigError::Missing("JWT_ED25519_SECRET"))?;
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .ok_or(ConfigError::Missing("JWT_ED25519_SECRET"))?;
     decode_jwt_secret(&raw)
 }
 
 /// Decode a JWT signing seed: hex (optional `0x`) or base64, exactly 32 bytes.
+///
+/// A seed published as a development default is refused: anyone holding it
+/// can mint a token every service accepts.
 fn decode_jwt_secret(raw: &str) -> Result<[u8; 32], ConfigError> {
     use base64::Engine as _;
 
@@ -345,10 +363,12 @@ fn decode_jwt_secret(raw: &str) -> Result<[u8; 32], ConfigError> {
             reason: "expected 32 bytes as hex or base64".to_string(),
         })?;
 
-    bytes.try_into().map_err(|_| ConfigError::Invalid {
+    let seed: [u8; 32] = bytes.try_into().map_err(|_| ConfigError::Invalid {
         key: "JWT_ED25519_SECRET",
         reason: "decoded secret must be exactly 32 bytes".to_string(),
-    })
+    })?;
+    http_common::config::reject_dev_secret("JWT_ED25519_SECRET", &seed)?;
+    Ok(seed)
 }
 
 /// Parse `ATTESTER_ACCOUNT` (SS58) into the raw 32-byte account.
@@ -659,6 +679,25 @@ mod tests {
     }
 
     #[test]
+    fn jwt_secret_refuses_the_published_dev_seed() {
+        use base64::Engine as _;
+
+        let dev = [1u8; 32];
+        for raw in [
+            hex::encode(dev),
+            format!("0x{}", hex::encode(dev)),
+            base64::engine::general_purpose::STANDARD.encode(dev),
+        ] {
+            let err = decode_jwt_secret(&raw).unwrap_err();
+            assert!(
+                matches!(&err, ConfigError::Invalid { key: "JWT_ED25519_SECRET", reason }
+                    if reason.contains("published development value")),
+                "{err}"
+            );
+        }
+    }
+
+    #[test]
     fn attester_account_parses_ss58_and_rejects_hex() {
         const ALICE_SS58: &str = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
         const ALICE_HEX: &str = "d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
@@ -808,6 +847,7 @@ mod tests {
         const VARS: &[&str] = &[
             "DEVICE_ATTESTATION_DATABASE_URL",
             "JWT_ED25519_SECRET",
+            "PEOPLE_RPC_URL",
             "ASSET_HUB_RPC_URL",
             "ATTESTER_ACCOUNT",
             "AUTH_ENABLED",
@@ -833,7 +873,24 @@ mod tests {
         missing("DEVICE_ATTESTATION_DATABASE_URL");
         std::env::set_var("DEVICE_ATTESTATION_DATABASE_URL", "postgres://unused");
         missing("JWT_ED25519_SECRET");
-        std::env::set_var("JWT_ED25519_SECRET", hex::encode([1u8; 32]));
+        // Compose passes an unset secret through as an empty string.
+        std::env::set_var("JWT_ED25519_SECRET", "  ");
+        missing("JWT_ED25519_SECRET");
+        std::env::set_var("JWT_ED25519_SECRET", hex::encode([7u8; 32]));
+        missing("PEOPLE_RPC_URL");
+        std::env::set_var("PEOPLE_RPC_URL", "");
+        let err = Config::from_env().expect_err("empty PEOPLE_RPC_URL");
+        assert!(
+            matches!(
+                err,
+                ConfigError::Invalid {
+                    key: "PEOPLE_RPC_URL",
+                    ..
+                }
+            ),
+            "{err}"
+        );
+        std::env::set_var("PEOPLE_RPC_URL", "wss://people.example");
         missing("ASSET_HUB_RPC_URL");
         std::env::set_var("ASSET_HUB_RPC_URL", "wss://asset-hub.example");
         missing("ATTESTER_ACCOUNT");

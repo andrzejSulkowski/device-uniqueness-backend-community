@@ -36,9 +36,12 @@ paths = [
 
 regexTarget = "match"
 regexes = [
-  # JWT_ED25519_PUBLIC_KEY — a PUBLIC verification key, matched by the generic
-  # high-entropy rule. It is the public half of the dev-only JWT_ED25519_SECRET
-  # documented alongside it, and is meant to be readable.
+  # The public key of the old dev JWT seed (0x0101..01) — a PUBLIC
+  # verification key, matched by the generic high-entropy rule. No config ships
+  # it any more; it survives in history and in the denylists that refuse it
+  # (http_common::config::reject_dev_secret, helm/templates/_helpers.tpl,
+  # release.yml, check.yml). Reintroduction as a default is caught by
+  # scripts/verify_compose_boundaries.sh and refused at boot.
   '''0x8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c''',
   # The environment-variable NAME, appearing as a struct field in the config
   # parser's error paths. A key's name is not the key.
@@ -46,12 +49,9 @@ regexes = [
   # The commented-out FCM service-account template in .env.example, whose
   # private_key field is the literal three dots.
   '''PRIVATE KEY-----\\n\.\.\.\\n-----END PRIVATE KEY''',
-  # The dev TURN_SECRET: base64 of the literal string
-  # "dev-only-turn-secret-change-me". It is read only under
-  # TURN_PROVIDER=coturn, which .env.example selects so the local stack boots
-  # offline; under the default cloudflare provider turn-api holds no
-  # relay-shared secret at all and this value is never read. Published on
-  # purpose, said so in the file, and authenticates against no relay that
-  # exists. It is in the working tree and in history, so both scans see it.
+  # The old dev TURN_SECRET: base64 of the literal string
+  # "dev-only-turn-secret-change-me". No config ships it any more; it survives
+  # in history and in the denylists that refuse it (see the key above), so
+  # both scans see it. It authenticates against no relay that exists.
   '''ZGV2LW9ubHktdHVybi1zZWNyZXQtY2hhbmdlLW1l''',
 ]

@@ -109,6 +109,24 @@ default, and what breaks if it is wrong:
 cp .env.example .env && chmod 600 .env
 ```
 
+Signing secrets and verify keys ship **empty**, and every service refuses to
+boot without them. In a source checkout, `just dev-secrets` fills them in for
+local use: a fresh `JWT_ED25519_SECRET` and its `JWT_ED25519_PUBLIC_KEY`, plus a
+`TURN_SECRET` when `TURN_PROVIDER=coturn`. It also replaces values an older
+`.env.example` published. Anywhere else, generate them yourself:
+
+```bash
+openssl rand -hex 32      # JWT_ED25519_SECRET (then publish its public key)
+openssl rand -base64 32   # TURN_SECRET, coturn only; must match the relay
+```
+
+Any value this repository ever published as a default (the `0x0101..01` JWT
+seed, its public key `0x8a88e3dd..6f5c`, and the old TURN placeholders) is
+**refused at boot** in every encoding, by `device-attestation-api`, `turn-api`
+and every verify-only service, and by the Helm chart at render time. A
+deployment still running one of them must rotate before upgrading (see
+[Config and secret rotation](#config-and-secret-rotation)).
+
 The values you must decide, at minimum:
 
 | Variable | What it is |
@@ -116,21 +134,25 @@ The values you must decide, at minimum:
 | `DUB_NETWORK` | Which People runtime this build targets — `testnet` or `polkadot`. **Read when the image is built, not when it runs**; see [Choosing a network](#choosing-a-network) directly below. |
 | `COMPOSE_PROFILES` | `invite-tickets` on `testnet`; **empty** on `polkadot`, whose image has no such roles. |
 | `ENV_ID` | This environment's name; suffixes every network alias. |
-| `PEOPLE_RPC_URL` | People Chain RPC. Must be a **full** node serving the legacy `state_queryStorageAt` — see the availability failure mode below. |
+| `PEOPLE_RPC_URL` | People Chain RPC. **Required**, with no built-in default: every role that reaches the chain refuses to boot without it. Must be a **full** node serving the legacy `state_queryStorageAt` — see the availability failure mode below. |
 | `ASSET_HUB_RPC_URL` | Asset Hub RPC. **Required** by both `device-attestation-api` (reads `LiteLabelOwner` for availability and the digit choice) and the writer (submits `reserve_name`). Same `state_queryStorageAt` requirement. **Must name the same network as `PEOPLE_RPC_URL`** — a split pair claims labels on the wrong chain, unrecoverably. |
 | `ATTESTER_ACCOUNT` | The on-chain attester authority (SS58). |
 | `CHAIN_WRITER_SIGNER_SURI` | The writer's signing key; must be an authorized attester or its proxy, and funded. |
-| `JWT_ED25519_SECRET` | 32 bytes. `device-attestation-api` only. |
-| `JWT_ED25519_PUBLIC_KEY` or `JWT_JWKS_JSON` | The verify-only half, for the other services. |
+| `JWT_ED25519_SECRET` | 32 bytes. `device-attestation-api` only. **Required**, no default; published dev seeds are refused. |
+| `JWT_ED25519_PUBLIC_KEY` or `JWT_JWKS_JSON` | The verify-only half, for the other services. **Required**, no default; the published dev key is refused on both. |
 | `INVITE_INVITER_SIGNER_SURI` | `testnet` only: the invite pool's own account — **not** the writer's. Unused on `polkadot`. |
 | `TURN_PROVIDER` | `cloudflare` (the code default) or `coturn`. Picks which of the two rows below is required. `.env.example` selects `coturn`, because that provider needs no account anywhere and so lets the quickstart stack boot offline. |
 | `TURN_API_TOKEN` + `TURN_KEY_ID` | `cloudflare` only. The token is the secret; the key id is not, but both are `turn-api` only — and `verify_compose_boundaries.sh` fails if either appears on another service. |
-| `TURN_SECRET` + `TURN_REALM` + `ICE_SERVERS` | `coturn` only, all three required. The secret and algorithm must match your relay's `--use-auth-secret` config exactly, and `ICE_SERVERS` must name at least one relay: nothing upstream supplies it on this provider, so an empty list would mint credentials with nothing to use them against. |
+| `TURN_SECRET` + `TURN_REALM` + `ICE_SERVERS` | `coturn` only, all three required. `TURN_SECRET` has no default, and the old published placeholders are refused. The secret and algorithm must match your relay's `--use-auth-secret` config exactly, and `ICE_SERVERS` must name at least one relay: nothing upstream supplies it on this provider, so an empty list would mint credentials with nothing to use them against. |
 
-The defaults in `.env.example` point at a public test network
-(`wss://paseo-people-next-system-rpc.polkadot.io`) and use well-known dev keys (`//Alice`,
-`//Bob`). They exist so `docker compose up` works on a laptop. **Replace every
-one of them before a deployment anyone else can reach.**
+The values in `.env.example` point at a public test network
+(`wss://paseo-people-next-system-rpc.polkadot.io`) and use well-known dev
+signer keys (`//Alice`, `//Bob`). They exist so `docker compose up` works on a
+laptop. **Replace every one of them before a deployment anyone else can
+reach.** The compose file itself carries no chain endpoint, JWT key, TURN
+secret or chain signer SURI: unset in `.env`, each reaches its service empty
+and the service refuses to start, naming it. The release bundle's
+`.env.example` ships the signer SURIs blank as well.
 
 ### Choosing a network
 

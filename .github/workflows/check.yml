@@ -68,6 +68,33 @@ jobs:
         if: always()
         run: df -h /
 
+  helm:
+    # The chart's render-time guards are the deploy path's last line against a
+    # published dev credential; prove the example renders and that each
+    # published value is refused. helm is preinstalled on ubuntu-latest.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - name: chart guards
+        run: |
+          set -euo pipefail
+          helm version --short
+          base=(template guard helm -f helm/values-example.yaml --set global.imageTag=ci)
+          helm "${base[@]}" > /dev/null
+          refuse() {
+            if helm "${base[@]}" --set-string "$1" > /dev/null 2>&1; then
+              echo "::error::the chart rendered with a published dev value: $1"
+              exit 1
+            fi
+          }
+          refuse 'secrets.device-attestation-api.JWT_ED25519_SECRET=0x0101010101010101010101010101010101010101010101010101010101010101'
+          refuse 'secrets.device-attestation-api.JWT_ED25519_SECRET=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE='
+          refuse 'secrets.turn-api.TURN_SECRET=ZGV2LW9ubHktdHVybi1zZWNyZXQtY2hhbmdlLW1l'
+          refuse 'global.env.JWT_ED25519_PUBLIC_KEY=0x8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c'
+          echo "chart guards: ok"
+
   database:
     needs: offline
     runs-on: ubuntu-latest

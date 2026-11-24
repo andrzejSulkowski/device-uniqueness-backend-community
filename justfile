@@ -11,6 +11,12 @@ verify-config:
     scripts/verify_compose_boundaries.sh
     scripts/verify_role_split.sh
 
+# Write a fresh JWT seed and its public key into `.env` (created from
+# `.env.example` if missing). No signing secret ships with a default, and
+# published dev values are refused at boot. `just dev-secrets --force` rotates.
+dev-secrets *ARGS:
+    scripts/dev_secrets.sh {{ARGS}}
+
 fmt:
     cargo fmt --all
 

@@ -331,4 +331,38 @@ fi
   done
 )
 
+# No committed fallbacks. These keys must reach a service only as a bare
+# pass-through, `KEY: ${KEY:-}`, so an environment that forgot to set one fails
+# at boot naming it instead of running on a value printed in this repository.
+# Checked on the RAW files: the rendered form cannot tell a default from a value
+# the operator set.
+#   - signing secrets and verify keys: a published value lets anyone mint
+#     tokens every service accepts, sign chain transactions as a dev account,
+#     or mint TURN credentials;
+#   - chain endpoints: a default silently points an unconfigured environment at
+#     a public network, and the two must always name the same one.
+# `CONTAINER_KEY=SOURCE_VAR` names a key interpolated from a differently named
+# host variable (`CONTAINER_KEY: ${SOURCE_VAR:-}`).
+NO_DEFAULT_KEYS=(
+  JWT_ED25519_SECRET
+  JWT_ED25519_PUBLIC_KEY
+  TURN_SECRET
+  CHAIN_WRITER_SIGNER_SURI
+  INVITER_SIGNER_SURI=INVITE_INVITER_SIGNER_SURI
+  PEOPLE_RPC_URL
+  ASSET_HUB_RPC_URL
+)
+for file in docker-compose.yml docker-compose.debug.yml; do
+  for entry in "${NO_DEFAULT_KEYS[@]}"; do
+    key="${entry%%=*}"
+    source_var="${entry#*=}"
+    bad="$(grep -nE "^[[:space:]]+${key}:" "$file" | grep -vE "^[0-9]+:[[:space:]]+${key}: \\$\\{${source_var}:-\\}[[:space:]]*(#.*)?$" || true)"
+    if [ -n "$bad" ]; then
+      echo "$file: $key must be passed through with no default (\`$key: \${$source_var:-}\`), got:" >&2
+      echo "$bad" >&2
+      exit 1
+    fi
+  done
+done
+
 echo "compose configuration boundaries: ok"

@@ -277,8 +277,7 @@ impl AdvancerConfig {
         validate_cadence(interval, lease_ttl)?;
         Ok(Self {
             database_url,
-            people_rpc_url: std::env::var("PEOPLE_RPC_URL")
-                .unwrap_or_else(|_| "wss://paseo-people-next-system-rpc.polkadot.io".to_string()),
+            people_rpc_url: crate::config::people_rpc_url_from_env()?,
             interval,
             lease_ttl,
             // Unique per boot: in a container the PID is always 1, and equal
@@ -724,6 +723,33 @@ mod tests {
         std::env::set_var("QUEUE_TEST_STRICT_PADDED", " 42 ");
         assert_eq!(env_u64_strict("QUEUE_TEST_STRICT_PADDED", 30).unwrap(), 42);
         assert_eq!(env_u64_strict("QUEUE_TEST_STRICT_UNSET", 30).unwrap(), 30);
+    }
+
+    #[test]
+    fn advancer_config_requires_a_people_rpc_url() {
+        const VARS: &[&str] = &[
+            "DEVICE_ATTESTATION_DATABASE_URL",
+            "PEOPLE_RPC_URL",
+            "QUEUE_ADVANCE_INTERVAL_SECS",
+            "QUEUE_LEASE_TTL_SECS",
+        ];
+        let _guard = crate::ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let clear = || VARS.iter().for_each(|k| std::env::remove_var(k));
+        clear();
+        std::env::set_var("DEVICE_ATTESTATION_DATABASE_URL", "postgres://unused");
+
+        // No built-in chain: unset or empty fails instead of reaching a
+        // public network.
+        let err = AdvancerConfig::from_env().expect_err("unset");
+        assert!(err.to_string().contains("PEOPLE_RPC_URL"), "{err}");
+        std::env::set_var("PEOPLE_RPC_URL", " ");
+        let err = AdvancerConfig::from_env().expect_err("empty");
+        assert!(err.to_string().contains("PEOPLE_RPC_URL"), "{err}");
+
+        std::env::set_var("PEOPLE_RPC_URL", "wss://people.example");
+        let config = AdvancerConfig::from_env().expect("minimal env");
+        assert_eq!(config.people_rpc_url, "wss://people.example");
+        clear();
     }
 
     #[test]
