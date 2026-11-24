@@ -68,7 +68,8 @@ needs_value() {
 
 # TURN_SECRET first and independently: an .env from before this script existed
 # may already carry a fresh JWT seed but still the refused TURN placeholder.
-if [[ "$(value_of TURN_PROVIDER)" == "coturn" ]]; then
+turn_provider="$(value_of TURN_PROVIDER)"
+if [[ "${turn_provider:-coturn}" == "coturn" ]]; then
   if needs_value TURN_SECRET; then
     set_key TURN_SECRET "$(openssl rand -base64 32)"
     echo "wrote a fresh TURN_SECRET to $env_file (TURN_PROVIDER=coturn)"
