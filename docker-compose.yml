@@ -5,15 +5,17 @@ name: dub-paseo-next-v2
 # endpoint, paired with that network's Asset Hub so the dotNS lane can run), so
 # `docker compose up` needs outbound internet to reach it.
 #
-# Signing secrets, verify keys and chain endpoints have NO default here: an
-# unset one reaches the service as an empty value and the service refuses to
-# boot, naming it. Set them in a `.env` file next to this compose file (it is
-# auto-loaded) or the shell environment; `just dev-secrets` writes a fresh JWT
-# seed and its public key into `.env` for local use. Every value ever
-# published as a dev default is refused at boot (http_common::config::
-# reject_dev_secret), so a copied example cannot reach production.
-# The remaining dev defaults below (signer SURIs, database passwords) are
-# for local use only. NEVER ship them to prod.
+# Signing secrets (JWT seed, TURN secret, both chain signer SURIs), verify keys
+# and chain endpoints have NO default here: an unset one reaches the service as
+# an empty value and the service refuses to boot, naming it. Set them in a
+# `.env` file next to this compose file (it is auto-loaded) or the shell
+# environment. For local use, `cp .env.example .env` supplies the dev signer
+# SURIs and chain endpoints, and `just dev-secrets` writes a fresh JWT seed and
+# its public key. Every JWT/TURN value ever published as a dev default is
+# refused at boot (http_common::config::reject_dev_secret), so a copied example
+# cannot reach production. The remaining dev defaults below (the dev attester
+# and inviter addresses, database passwords) are for local use only. NEVER ship
+# them to prod.
 
 services:
   postgres:
@@ -165,9 +167,10 @@ services:
     environment:
       DEVICE_ATTESTATION_DATABASE_URL: postgres://${DEVICE_ATTESTATION_DB_USER:-device_attestation}:${DEVICE_ATTESTATION_DB_PASSWORD:-device_attestation}@postgres:5432/${DEVICE_ATTESTATION_DB_NAME:-device_attestation}
       PEOPLE_RPC_URL: ${PEOPLE_RPC_URL:-}
-      # Dev signer. In prod the least-privilege proxy key; the writer proxies
-      # whenever ATTESTER_ACCOUNT is not this key.
-      CHAIN_WRITER_SIGNER_SURI: ${CHAIN_WRITER_SIGNER_SURI:-//Alice}
+      # No default (.env.example sets //Alice for dev). In prod the
+      # least-privilege proxy key; the writer proxies whenever ATTESTER_ACCOUNT
+      # is not this key.
+      CHAIN_WRITER_SIGNER_SURI: ${CHAIN_WRITER_SIGNER_SURI:-}
       # Same value device-attestation-api publishes at /api/v1/attester.
       ATTESTER_ACCOUNT: ${ATTESTER_ACCOUNT:-5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY}
       CHAIN_WRITER_HOLDER_ID: ${CHAIN_WRITER_HOLDER_ID:-}
@@ -428,14 +431,15 @@ services:
       INVITE_TICKETS_DATABASE_URL: postgres://invite_tickets:invite_tickets@invite-tickets-postgres:5432/invite_tickets
       PEOPLE_RPC_URL: ${PEOPLE_RPC_URL:-}
       PEOPLE_NETWORK: ${PEOPLE_NETWORK:-paseo}
-      # Dev signer (unfunded: batches finalize with ItemFailed and no tickets
-      # insert). In prod: the hot invite-inviter key, or a delegate that
-      # proxies for …ADDRESS (the wrap is derived from the two).
+      # Signer: no default (.env.example sets //Bob for dev, unfunded: batches
+      # finalize with ItemFailed and no tickets insert). In prod: the hot
+      # invite-inviter key, or a delegate that proxies for …ADDRESS (the wrap
+      # is derived from the two).
       # Interpolated from INVITE_INVITER_* so the invite pool keeps its own
       # signing account, distinct from every other writer (nonce lanes — see
-      # docs/deploy.md). Dev default = //Bob.
+      # docs/deploy.md). The address keeps its dev default (//Bob's).
       INVITER_ADDRESS: ${INVITE_INVITER_ADDRESS:-5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty}
-      INVITER_SIGNER_SURI: ${INVITE_INVITER_SIGNER_SURI:-//Bob}
+      INVITER_SIGNER_SURI: ${INVITE_INVITER_SIGNER_SURI:-}
       POOL_DIMS: ${POOL_DIMS:-Game,ProofOfInk}
       POOL_TARGET_SIZE: ${POOL_TARGET_SIZE:-10000}
       POOL_BATCH_MAX: ${POOL_BATCH_MAX:-100}

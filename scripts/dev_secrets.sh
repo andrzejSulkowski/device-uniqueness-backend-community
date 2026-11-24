@@ -66,34 +66,44 @@ needs_value() {
   [[ -z "$current" || "$force" == true ]] || is_published "$current"
 }
 
-# TURN_SECRET first and independently: an .env from before this script existed
-# may already carry a fresh JWT seed but still the refused TURN placeholder.
-turn_provider="$(value_of TURN_PROVIDER)"
-if [[ "${turn_provider:-coturn}" == "coturn" ]]; then
-  if needs_value TURN_SECRET; then
-    set_key TURN_SECRET "$(openssl rand -base64 32)"
-    echo "wrote a fresh TURN_SECRET to $env_file (TURN_PROVIDER=coturn)"
+# Generate everything before writing anything, so a failure (an OpenSSL that
+# cannot do Ed25519) leaves the env file exactly as it was.
+seed=""
+public_key=""
+if needs_value JWT_ED25519_SECRET; then
+  seed="$(openssl rand -hex 32)"
+  # Ed25519 public key from a raw seed: wrap it as a PKCS#8 DER private key
+  # (fixed 16-byte prefix for an Ed25519 key), export the SubjectPublicKeyInfo,
+  # and keep its last 32 bytes.
+  if ! public_key="$(
+    printf '302e020100300506032b657004220420%s' "$seed" \
+      | xxd -r -p \
+      | openssl pkey -inform DER -pubout -outform DER \
+      | tail -c 32 \
+      | xxd -p -c 64
+  )" || [[ ${#public_key} -ne 64 ]]; then
+    echo "failed to derive the Ed25519 public key (needs OpenSSL >= 1.1.1; macOS ships LibreSSL)" >&2
+    exit 1
   fi
 fi
 
-if ! needs_value JWT_ED25519_SECRET; then
-  echo "$env_file already sets JWT_ED25519_SECRET; leaving it (pass --force to replace)"
-  exit 0
+turn_secret=""
+turn_provider="$(value_of TURN_PROVIDER)"
+# Unset means coturn, matching compose's `${TURN_PROVIDER:-coturn}`.
+if [[ "${turn_provider:-coturn}" == "coturn" ]] && needs_value TURN_SECRET; then
+  turn_secret="$(openssl rand -base64 32)"
 fi
 
-seed="$(openssl rand -hex 32)"
-# Ed25519 public key from a raw seed: wrap it as a PKCS#8 DER private key
-# (fixed 16-byte prefix for an Ed25519 key), export the SubjectPublicKeyInfo,
-# and keep its last 32 bytes.
-if ! public_key="$(
-  printf '302e020100300506032b657004220420%s' "$seed" \
-    | xxd -r -p \
-    | openssl pkey -inform DER -pubout -outform DER \
-    | tail -c 32 \
-    | xxd -p -c 64
-)" || [[ ${#public_key} -ne 64 ]]; then
-  echo "failed to derive the Ed25519 public key (needs OpenSSL >= 1.1.1; macOS ships LibreSSL)" >&2
-  exit 1
+# TURN_SECRET independently of the seed: an .env from before this script
+# existed may carry a fresh JWT seed but still the refused TURN placeholder.
+if [[ -n "$turn_secret" ]]; then
+  set_key TURN_SECRET "$turn_secret"
+  echo "wrote a fresh TURN_SECRET to $env_file (TURN_PROVIDER=coturn)"
+fi
+
+if [[ -z "$seed" ]]; then
+  echo "$env_file already sets JWT_ED25519_SECRET; leaving it (pass --force to replace)"
+  exit 0
 fi
 
 set_key JWT_ED25519_SECRET "0x$seed"

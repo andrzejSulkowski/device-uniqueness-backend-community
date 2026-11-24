@@ -11,8 +11,8 @@ Pre-1.0, a breaking change bumps the **minor**. Pin an exact `vX.Y.Z`.
 **Upgrading.** No signing secret, verify key or chain endpoint has a default
 any more, in the binaries or in `docker-compose.yml`. Set `JWT_ED25519_SECRET`,
 `JWT_ED25519_PUBLIC_KEY` (or `JWT_JWKS_JSON`), `PEOPLE_RPC_URL`,
-`ASSET_HUB_RPC_URL` and, under `TURN_PROVIDER=coturn`, `TURN_SECRET`
-explicitly. Before upgrading, check that no environment runs a published dev
+`ASSET_HUB_RPC_URL`, `CHAIN_WRITER_SIGNER_SURI`, `INVITE_INVITER_SIGNER_SURI`
+(testnet) and, under `TURN_PROVIDER=coturn`, `TURN_SECRET` explicitly. Before upgrading, check that no environment runs a published dev
 value (compare `/.well-known/jwks.json` against `0x8a88e3dd..6f5c`, and the
 relay's `static-auth-secret` against the old placeholders): the new release
 refuses to boot on them, and rotating the JWT seed logs every client out, so
@@ -29,8 +29,11 @@ plan that rotation with the app teams. Local checkouts run `just dev-secrets`.
   (security_findings#121)
 - **`docker-compose.yml` no longer falls back to committed secrets.**
   `JWT_ED25519_SECRET`, `JWT_ED25519_PUBLIC_KEY` and `TURN_SECRET` pass through
-  empty when unset, and `.env.example` ships them blank. The release bundle
-  fails to build if it carries any of them, the Helm chart refuses them at
+  empty when unset, and `.env.example` ships them blank. The chain writer's and
+  invite pool's signer SURIs no longer default to `//Alice` / `//Bob` in compose
+  either; the repo `.env.example` keeps them for local use, and the release
+  bundle ships them blank. The release bundle fails to build if it carries a
+  value for any of these, the Helm chart refuses them at
   render time, and `scripts/verify_compose_boundaries.sh` fails on any non-empty
   compose default for them. (security_findings#121)
 - **`PEOPLE_RPC_URL` is required.** `device-attestation-api`, the chain writer

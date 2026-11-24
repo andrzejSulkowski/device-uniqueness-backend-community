@@ -149,9 +149,10 @@ The values in `.env.example` point at a public test network
 (`wss://paseo-people-next-system-rpc.polkadot.io`) and use well-known dev
 signer keys (`//Alice`, `//Bob`). They exist so `docker compose up` works on a
 laptop. **Replace every one of them before a deployment anyone else can
-reach.** The compose file itself carries no chain endpoint, JWT key or TURN
-secret: unset in `.env`, each reaches its service empty and the service
-refuses to start, naming it.
+reach.** The compose file itself carries no chain endpoint, JWT key, TURN
+secret or chain signer SURI: unset in `.env`, each reaches its service empty
+and the service refuses to start, naming it. The release bundle's
+`.env.example` ships the signer SURIs blank as well.
 
 ### Choosing a network
 
